@@ -252,7 +252,7 @@ if __name__ == "__main__":
 
     # find all the html files in the current folder
     htmlfiles = os.listdir(os.curdir)
-    htmlfiles = [hf.strip() for hf in htmlfiles if hf.strip().endswith('.html')]
+    htmlfiles = [hf.strip() for hf in htmlfiles if hf.strip().endswith('html')]
     htmlfiles.sort()
 
     # make the package and nav files
