@@ -56,7 +56,7 @@ def makepackage(htmlfiles, docoptions):
     currenttime = time.asctime(time.gmtime()) + " GMT"
 
     package = etree.Element('package',
-        nsmap={'xmlns':"http://www.idpf.org/2007/opf"},
+        nsmap={None:"http://www.idpf.org/2007/opf"},
         attrib={'version':'3.0', 'unique-identifer':'uid'})
     package.text = '\n'
     metadata = etree.XML('''
@@ -189,7 +189,7 @@ def makenavfile(package, docoptions):
     html.append(head)
     html.append(body)
     body.append(h1)
-    html.append(nav)
+    body.append(nav)
 
     return html
 
