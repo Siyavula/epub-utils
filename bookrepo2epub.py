@@ -118,18 +118,19 @@ def makepackage(htmlfiles, docoptions):
 
         # loop through every img and add it to the end of manifest
         for img in htmlobject.findall('.//img'):
-
-            bookdir = '/'.join(html_dest_dir.split('/')[2:-1])
-            href = os.path.join(bookdir, img.attrib.get('src'))
+            bookdir = os.path.abspath(os.path.join(os.curdir, docoptions['<outputfolder>']))
+            print 'bookdir', bookdir
+            imgdir = os.path.join(bookdir, "EPUB", "xhtml", docoptions['<name>'], '/'.join(img.attrib['src'].split('/')[0:-1]))
+            print imgdir
+            href = os.path.join('xhtml', docoptions['<name>'], img.attrib.get('src'))
             # copy the image to that place
-            newdir = '/'.join(href.split('/')[0:-1])
-            if not os.path.exists(newdir):
-                os.makedirs(newdir)
+            if not os.path.exists(imgdir):
+                os.makedirs(imgdir)
 
             if not os.path.exists(img.attrib['src']):
                 print 'WARNING: ', img.attrib['src'],  "does not exist!"
             else:
-                shutil.copy(img.attrib['src'], href)
+                shutil.copy(img.attrib['src'], imgdir)
             
             manifestitem = etree.Element('item')
             manifestitem.attrib['id'] = "{filename}".format(filename = href.split('/')[-1].strip())
@@ -194,7 +195,7 @@ def makenavfile(package, docoptions):
 
 def make_new_epub_folder(options):
     '''given docopt's arguments dict: create an empty epub folder if it does not exist'''
-    epubdir = options['<outputfolder>']
+    epubdir = os.path.abspath(os.path.join(os.curdir, options['<outputfolder>']))
 
     name = options['<name>'].replace(' ', '-').lower()
     EPUBdir = os.path.join(epubdir, 'EPUB')
@@ -203,7 +204,7 @@ def make_new_epub_folder(options):
     namedir = os.path.join(xhtmldir, name)
 
     if not os.path.isdir(epubdir):
-        os.mkdir(epubdir)
+        os.makedirs(epubdir)
     if not os.path.isdir(EPUBdir):
         os.mkdir(EPUBdir)
     if not os.path.isdir(METAdir):
@@ -218,7 +219,7 @@ def make_new_epub_folder(options):
 
 def make_container(docoptions):
     epubfolder = docoptions['<outputfolder>']
-    metafolder = os.path.join(epubfolder, 'META')
+    metafolder = os.path.join(epubfolder, 'META-INF')
 
     if not os.path.exists(metafolder):
         os.makedirs(metafolder)
@@ -231,7 +232,7 @@ def make_container(docoptions):
     else:
         container = etree.XML('<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0"><rootfiles></rootfiles></container>')
 
-    packagefilepath = "EPUB/{name}.opf".format(name=docoptions['<name>'])
+    packagefilepath = "EPUB/package-{name}.opf".format(name=docoptions['<name>'])
     current_rootfiles = [r.attrib['full-path'] for r in container.findall('.//rootfile')]
 
     if packagefilepath not in current_rootfiles:
@@ -269,7 +270,7 @@ if __name__ == "__main__":
         f.write(etree.tostring(navhtml, pretty_print=True))
      
     epubfolder = arguments['<outputfolder>']
-    metafolder = os.path.join(epubfolder, 'META')
+    metafolder = os.path.join(epubfolder, 'META-INF')
     containerpath = os.path.join(metafolder, "container.xml")
     container = make_container(arguments)
     with open(containerpath, 'w') as f:
