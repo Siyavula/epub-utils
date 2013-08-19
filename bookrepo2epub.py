@@ -14,6 +14,9 @@ import shutil
 from lxml import etree
 from docopt import docopt
 
+# uncomment to debug
+#import pudb; pu.db
+
 usage_info = """Usage: bookrepo2epub.py  --output <outputfolder>  --name <name> | --help
 
 
