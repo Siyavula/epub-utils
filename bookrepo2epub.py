@@ -119,13 +119,14 @@ def makepackage(htmlfiles, docoptions):
         # loop through every img and add it to the end of manifest
         for img in htmlobject.findall('.//img'):
             bookdir = os.path.abspath(os.path.join(os.curdir, docoptions['<outputfolder>']))
-            print 'bookdir', bookdir
             imgdir = os.path.join(bookdir, "EPUB", "xhtml", docoptions['<name>'], '/'.join(img.attrib['src'].split('/')[0:-1]))
-            print imgdir
             href = os.path.join('xhtml', docoptions['<name>'], img.attrib.get('src'))
             # copy the image to that place
             if not os.path.exists(imgdir):
-                os.makedirs(imgdir)
+                try:
+                    os.makedirs(imgdir)
+                except OSError:
+                    print "WARNING! Cannot create folder {folder}".format(folder=imgdir)
 
             if not os.path.exists(img.attrib['src']):
                 print 'WARNING: ', img.attrib['src'],  "does not exist!"
@@ -228,15 +229,15 @@ def make_container(docoptions):
         try:
             container = etree.parse(containerpath)
         except etree.XMLSyntaxError:
-            container = etree.XML('<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0"><rootfiles></rootfiles></container>')
+            container = etree.XML('<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0"><rootfiles>\n</rootfiles></container>')
     else:
-        container = etree.XML('<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0"><rootfiles></rootfiles></container>')
+        container = etree.XML('<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0"><rootfiles>\n</rootfiles></container>')
 
     packagefilepath = "EPUB/package-{name}.opf".format(name=docoptions['<name>'])
-    current_rootfiles = [r.attrib['full-path'] for r in container.findall('.//rootfile')]
-
+    current_rootfiles = [r.attrib['full-path'] for r in container.findall('.//{urn:oasis:names:tc:opendocument:xmlns:container}rootfile')]
     if packagefilepath not in current_rootfiles:
         rootfile = etree.Element('rootfile', attrib={'media-type':"application/oebps-package+xml", 'version':'1.0', 'full-path':packagefilepath})
+        rootfile.tail = '\n'
         container.find('.//{urn:oasis:names:tc:opendocument:xmlns:container}rootfiles').append(rootfile)
 
     return container
