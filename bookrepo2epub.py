@@ -29,6 +29,69 @@ Arguments:
 """
 
 
+def addcss(package, docoptions):
+    '''If there is no css added to the package file, add an empty css file that each html file references'''
+    css_found = False
+    for item in package.findall('.//manifest/item'):
+        mediatype = item.attrib['media-type']
+        # if there is already css in the manifest, assume everything is OK.
+        if mediatype == 'text/css':
+            css_found = True
+            return package
+
+    # this means there is no css
+    assert(css_found == False)
+
+    # add css entry to manifest
+    cssmanifestitem = etree.Element('item')
+    cssmanifestitem.attrib['id'] = "{name}-css".format(name=docoptions['<name>'])
+    cssmanifestitem.attrib['href'] = r"css/{name}.css".format(name=docoptions['<name>'])
+    cssmanifestitem.attrib['media-type'] = "text/css"
+    cssmanifestitem.tail = '\n'
+    package.find('.//manifest').append(cssmanifestitem)
+
+    # Create the empty css file also
+    cssfolder = os.path.join(docoptions['<outputfolder>'], 'EPUB', 'css')
+    if not os.path.exists(cssfolder):
+        os.makedirs(cssfolder)
+
+    cssfile = os.path.join(cssfolder, '{name}.css'.format(name=docoptions['<name>']))
+    if not os.path.exists(cssfile):
+        with open(cssfile, 'w') as f:
+            f.write(r'\* Custom css file for {name} *\ '.format(name=docoptions['<name>']))
+            f.close()
+
+    cssfile = os.path.abspath(cssfile)
+    # add this entry to each html file
+    cwd = os.path.abspath(os.curdir)
+    os.chdir(os.path.join(docoptions['<outputfolder>'], 'EPUB'))
+
+    htmlfiles = [item.attrib['href'] for item in package.findall('.//manifest/item') if item.attrib['media-type'] == "application/xhtml+xml"]
+
+    for html in htmlfiles:
+        # add the empty css file
+        with open(html, 'r') as f:
+            contents = etree.HTML(f.read())
+            f.close()
+            head = contents.find('.//head')
+            link = etree.Element('link')
+            link.attrib['rel'] = "stylesheet"
+            link.attrib['type'] = "text/css"
+            link.attrib['href'] = os.path.relpath(cssfile, html)
+            print '------------------'
+            print os.path.abspath(cssfile)
+            print os.path.abspath(html)
+            head.append(link)
+
+        with open(html, 'w') as f:
+            f.write(etree.tostring(contents, pretty_print=True))
+            f.close()
+
+
+
+    os.chdir(cwd)
+
+    return package
 
 def makepackage(htmlfiles, docoptions):
     '''Make a package.opf file given a list of html files
@@ -65,11 +128,11 @@ def makepackage(htmlfiles, docoptions):
     metadata = etree.XML('''
        <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
           <dc:identifier id="uid">siyavula.com.dummy-book-repo.1.0</dc:identifier>
-          <dc:title>Siyavula Education: Dummy Book</dc:title>
+          <dc:title>Siyavula Education: {bookname}</dc:title>
           <dc:creator>Siyavula Education</dc:creator>
           <dc:language>en</dc:language>
           <meta property="dcterms:modified">{time}</meta>
-       </metadata>'''.format(time = currenttime))
+       </metadata>'''.format(time = currenttime, bookname=docoptions['<name>']))
 
     manifest = etree.Element('manifest')
     manifest.text = '\n'
@@ -88,6 +151,8 @@ def makepackage(htmlfiles, docoptions):
     spine = etree.Element('spine')
     spine.text = '\n'
 
+    used_ids = []
+
     # loop through every htmlfile
     for num, hf in enumerate(htmlfiles):
         # read the file's contents and create etree object
@@ -96,11 +161,22 @@ def makepackage(htmlfiles, docoptions):
         # add htmlfile to manifest
         # assume these files will be moved to a folder called xhtml/name in the
         # current folder
-        html_dest_dir = r"{epubname}/EPUB/xhtml/{name}/{filename}".format(name=docoptions['<name>'],
-            filename=hf,
-            epubname=docoptions['<outputfolder>'])
+        html_dest_dir = os.path.realpath(r"{epubname}/EPUB/xhtml/{name}/{filename}".format(name=docoptions['<name>'],
+            filename=os.path.normpath(hf),
+            epubname=docoptions['<outputfolder>']))
         manifestitem = etree.Element('item')
-        manifestitem.attrib['id'] = "chapter-{num}".format(num=num)
+        new_id = "chapter-{num}".format(num=num)
+        if new_id not in used_ids:
+            used_ids.append(new_id)
+            manifestitem.attrib['id'] = new_id
+        else:
+            i = 0
+            while new_id in used_ids:
+                new_id += '-{n}'.format(n=i)
+                i += 1
+            manifestitem.attrib['id'] = new_id
+            used_ids.append(new_id)
+
         manifestitem.attrib['href'] = r"xhtml/{name}/{filename}".format(name=docoptions['<name>'],
             filename=hf)
 
@@ -116,34 +192,53 @@ def makepackage(htmlfiles, docoptions):
         itemref.attrib['idref'] = manifestitem.attrib['id']
         spine.append(itemref)
 
+        
         # copy the html to that location
+        if not os.path.exists(os.path.dirname(html_dest_dir)):
+            os.makedirs(os.path.dirname(html_dest_dir))
         shutil.copy(hf, html_dest_dir)
 
         # loop through every img and add it to the end of manifest
         for img in htmlobject.findall('.//img'):
-            bookdir = os.path.abspath(os.path.join(os.curdir, docoptions['<outputfolder>']))
-            imgdir = os.path.join(bookdir, "EPUB", "xhtml", docoptions['<name>'], '/'.join(img.attrib['src'].split('/')[0:-1]))
-            href = os.path.join('xhtml', docoptions['<name>'], img.attrib.get('src'))
+            bookdir = os.path.abspath(os.path.join(docoptions['<outputfolder>']))
+            img_current_dir = os.path.realpath(img.attrib['src'])
+            img_current_path = os.path.realpath(os.path.join(os.path.dirname(hf), img.attrib['src']))
+            img_dest_dir = os.path.join(bookdir, 'EPUB', 'xhtml', docoptions['<name>'], os.path.dirname(hf), os.path.dirname(img.attrib['src']))
+            href = os.path.join('xhtml', docoptions['<name>'], os.path.dirname(hf), img.attrib.get('src'))
             # copy the image to that place
-            if not os.path.exists(imgdir):
+            if not os.path.exists(img_dest_dir):
                 try:
-                    os.makedirs(imgdir)
+                    os.makedirs(img_dest_dir)
                 except OSError:
-                    print "WARNING! Cannot create folder {folder}".format(folder=imgdir)
+                    print "WARNING! Cannot create folder {folder}".format(folder=img_dest_dir)
 
-            if not os.path.exists(img.attrib['src']):
+            if not os.path.exists(img_current_path):
                 print 'WARNING: ', img.attrib['src'],  "does not exist!"
             else:
-                shutil.copy(img.attrib['src'], imgdir)
+                shutil.copy(img_current_path, img_dest_dir)
             
             manifestitem = etree.Element('item')
-            manifestitem.attrib['id'] = "{filename}".format(filename = href.split('/')[-1].strip())
+            new_id = "{filename}".format(filename = href.split('/')[-1].strip())
+            if new_id not in used_ids:
+                used_ids.append(new_id)
+                manifestitem.attrib['id'] = new_id
+            else:
+                i = 0
+                while new_id in used_ids:
+                    new_id += '-{n}'.format(n=i)
+                    i += 1
+                manifestitem.attrib['id'] = new_id
+                used_ids.append(new_id)
+
             manifestitem.attrib['href'] = r"{filename}".format(filename=href)
             manifestitem.attrib['media-type'] = mimetypes.guess_type(href)[0]
             manifestitem.tail = '\n'
             manifest.append(manifestitem)
-
-    
+    try:
+        assert(len(used_ids) == len(set(used_ids)))
+    except AssertionError:
+        print "Duplicate ids in package file"
+        sys.exit(1)
     package.append(metadata)
     package.append(manifest)
     package.append(spine)
@@ -168,11 +263,11 @@ def makenavfile(package, docoptions):
         idref = spineitem.attrib['idref']
         #  find html file in packagefile with that id
         htmlitem = [item for item in package.findall('.//manifest/item') if item.attrib['id'] == idref]
-        path = '{outputfolder}/EPUB/{path}'.format(outputfolder=docoptions['<outputfolder>'],name=docoptions['<name>'], path=htmlitem[0].attrib['href'])
+        path = os.path.normpath('{outputfolder}/EPUB/{path}'.format(outputfolder=docoptions['<outputfolder>'],name=docoptions['<name>'], path=htmlitem[0].attrib['href']))
         
         # find title of html file content
         thishtml = etree.HTML(open(path, 'r').read())
-        title = thishtml.find('.//h1')
+        title = thishtml.find('.//head/title')
         if title is not None:
             # Take the first H1 as the title
             title = title.text
@@ -181,7 +276,7 @@ def makenavfile(package, docoptions):
             title = path.split('/')[-1][0:-4].replace('-', ' ')
         li = etree.Element('li')
         a = etree.Element('a')
-        a.attrib['href'] = path.split('/')[-1]
+        a.attrib['href'] = os.path.join('/'.join(htmlitem[0].attrib['href'].split('/')[2:]))
         a.text = title
 
         li.append(a)
@@ -201,7 +296,7 @@ def make_new_epub_folder(options):
     '''given docopt's arguments dict: create an empty epub folder if it does not exist'''
     epubdir = os.path.abspath(os.path.join(os.curdir, options['<outputfolder>']))
 
-    name = options['<name>'].replace(' ', '-').lower()
+    name = options['<name>'].replace(' ', '-')
     EPUBdir = os.path.join(epubdir, 'EPUB')
     METAdir = os.path.join(epubdir, 'META-INF')
     xhtmldir = os.path.join(EPUBdir, 'xhtml')
@@ -254,8 +349,15 @@ if __name__ == "__main__":
 
 
     # find all the html files in the current folder
-    htmlfiles = os.listdir(os.curdir)
-    htmlfiles = [hf.strip() for hf in htmlfiles if hf.strip().endswith('html')]
+#   htmlfiles = os.listdir(os.curdir)
+    htmlfiles = []
+    for dirpath, folder, files in os.walk(os.curdir):
+        for f in files:
+            if f.endswith(('.html', '.xhtml')):
+                htmlfiles.append(os.path.join(dirpath, f))
+
+
+#   htmlfiles = [hf.strip() for hf in htmlfiles if hf.strip().endswith('html')]
     htmlfiles.sort()
 
     # make the package and nav files
@@ -272,11 +374,25 @@ if __name__ == "__main__":
     with open(nav_dest , 'w') as f:
         f.write(r'<?xml version="1.0" encoding="UTF-8"?>')
         f.write(etree.tostring(navhtml, pretty_print=True))
-     
+    # add css if there aren't any 
+    package = addcss(package, arguments)
+
+    # update package
+    with open(package_dest , 'w') as f:
+        f.write(r'<?xml version="1.0" encoding="UTF-8"?>')
+        f.write(etree.tostring(package, pretty_print=True))
+
+
     epubfolder = arguments['<outputfolder>']
     metafolder = os.path.join(epubfolder, 'META-INF')
     containerpath = os.path.join(metafolder, "container.xml")
     container = make_container(arguments)
     with open(containerpath, 'w') as f:
         f.write(etree.tostring(container, pretty_print=True))
+
+    # write mimetype
+    with open(os.path.join(epubfolder, 'mimetype'), 'w') as f:
+        f.write('application/epub+zip')
+        f.close()
+
 
