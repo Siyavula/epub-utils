@@ -27,6 +27,7 @@ import os
 import logging
 import time
 import mimetypes
+import sys
 
 from lxml import etree
 import re
@@ -65,6 +66,7 @@ class Epub:
             for image in images: self.img_source_paths.append(image)
        
         self.update_package()
+        self.update_spine()
         self._find_js_css_in_html()
 
 
@@ -86,6 +88,27 @@ class Epub:
                     else:
                         logging.warn(" " + src + " already added to list of images, skipping")
         return images 
+
+    def update_spine(self):
+        '''Read the package object and update the spine. Default is the sorted order of the html files'''
+        manifest = self.package.find('.//manifest')
+        spine = self.package.find('.//spine')
+        if spine is None:
+            spine = etree.Element('spine')
+            manifest.addnext(spine)
+        else:
+            # clear it so it can be remade
+            spine.clear()
+            
+        htmlfiles = [(mi.attrib['href'], mi.attrib['id']) for mi in self.package.findall('.//manifest/item') if mi.attrib['media-type'] == 'application/xhtml+xml']
+        htmlfiles.sort()
+        for hf in htmlfiles:
+            href = hf[0]
+            hfid = hf[1]
+            itemref = etree.Element('itemref')
+            itemref.attrib['idref'] = hfid
+            spine.append(itemref)
+        
 
 
     def _find_js_css_in_html(self):
