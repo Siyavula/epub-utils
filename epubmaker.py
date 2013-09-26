@@ -11,8 +11,17 @@ import time
 import mimetypes
 import shutil
 
-from lxml import etree
-from docopt import docopt
+try:
+    from lxml import etree
+except ImportError:
+    print "lxml not found!"
+    sys.exit(1)
+
+try:
+    from docopt import docopt
+except ImportError:
+    print "docopt not found!"
+    sys.exit(1)
 
 from libepub import epub
 
@@ -49,4 +58,6 @@ if __name__ == "__main__":
         outputfolder=arguments['--output'])
 
     myEpub.addhtml(htmlfiles)
-    print(etree.tostring(myEpub.package, pretty_print=True))
+#   print(etree.tostring(myEpub.package, pretty_print=True))
+#   print "TODO: create the nav file and add it to package"
+

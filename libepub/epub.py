@@ -31,7 +31,11 @@ import sys
 
 from lxml import etree
 import re
-import tinycss
+try:
+    import tinycss
+except ImportError:
+    print "tinycss not found!"
+    sys.exit(1)
 
 class Epub:
     ''' Wrapper class for representing an epub.'''
@@ -49,7 +53,8 @@ class Epub:
 
         if 'name' in kwargs.keys():
             self.epubname = kwargs['name']
-
+        
+        self.verbose = False
 
         return
 
@@ -67,6 +72,7 @@ class Epub:
        
         self.update_package()
         self.update_spine()
+        self.create_nav()
         self._find_js_css_in_html()
 
 
@@ -81,12 +87,12 @@ class Epub:
             src = os.path.normpath(os.path.join(htmlfile, img.attrib.get('src')))
             if src is not None:
                 if r'http:' in src:
-                    logging.warn("Skipping http link to image" + src)
+                    if self.verbose: logging.warn("Skipping http link to image" + src)
                 else:
                     if src not in self.img_source_paths:
                         images.append(src)
                     else:
-                        logging.warn(" " + src + " already added to list of images, skipping")
+                        if self.verbose: logging.warn(" " + src + " already added to list of images, skipping")
         return images 
 
     def update_spine(self):
@@ -108,7 +114,41 @@ class Epub:
             itemref = etree.Element('itemref')
             itemref.attrib['idref'] = hfid
             spine.append(itemref)
+
+
+    def create_nav(self):
+        '''Uses all the html files and creates a nav tree'''
+        nav = etree.HTML('''<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+        <head>
+            <meta charset="utf-8"/>
+            <title>Table of Contents</title><
+        </head>
+        <body>        
+            <nav epub:type="toc" id="toc"></nav>
+        </body>
+    </html>''')
+
+        # Read each spine entry, they contain references to ids in the manifest.
+        spineitems = self.package.findall('.//spine/itemref')
+        manifest = self.package.find('.//manifest')
+
+        for si in spineitems:
+            idref = si.attrib.get('idref')
+            # find html file that corresponds to that ID.
+            # this href points to where the file WILL be in the EPUB once written to disk
+            html = [m for m in manifest if m.attrib.get('id') == idref][0]
+            
+            # find in self.html_source_paths the one that matches this one.
+            srchtml = [h for h in self.html_source_paths if h in html.attrib.get('href')][0]
+
+            # read the HTML file and extract the title
+            title = etree.HTML(open(srchtml, 'r').read()).find('.//h1').text
+            print idref, title
         
+
+        
+        return
+
 
 
     def _find_js_css_in_html(self):
@@ -246,7 +286,5 @@ class Epub:
             imgtype = mimetypes.guess_type(href)[0]
             manifestitem = self.create_manifest_item(href, imgtype)
             manifest.append(manifestitem)
-
-
 
         return
