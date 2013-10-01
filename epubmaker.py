@@ -55,7 +55,13 @@ if __name__ == "__main__":
 
     myEpub = epub.Epub(
         name=arguments['--name'], 
-        outputfolder=arguments['--output'])
+        outputfolder=arguments['--output'],
+        toc={
+            1:'div.section > h1.title',
+            2:'div.section > h2.title',
+            3:'div.section > h3.title'
+            },
+        verbose=False)
 
     myEpub.addhtml(htmlfiles)
 #   print(etree.tostring(myEpub.package, pretty_print=True))

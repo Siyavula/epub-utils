@@ -37,6 +37,12 @@ except ImportError:
     print "tinycss not found!"
     sys.exit(1)
 
+try:
+    import cssselect
+except ImportError:
+    print "cssselect not found!"
+    sys.exit(1)
+
 class Epub:
     ''' Wrapper class for representing an epub.'''
     def __init__(self, **kwargs):
@@ -53,8 +59,15 @@ class Epub:
 
         if 'name' in kwargs.keys():
             self.epubname = kwargs['name']
+
+        if 'verbose' in kwargs.keys(): 
+            self.verbose = kwargs['verbose']
+        else:
+            self.verbose = False
         
-        self.verbose = False
+        # how deep must the TOC reach?
+        if 'toc' in kwargs.keys():
+            self.toc = kwargs['toc']
 
         return
 
@@ -141,9 +154,72 @@ class Epub:
             # find in self.html_source_paths the one that matches this one.
             srchtml = [h for h in self.html_source_paths if h in html.attrib.get('href')][0]
 
+            ol = etree.Element('ol')
+
             # read the HTML file and extract the title
-            title = etree.HTML(open(srchtml, 'r').read()).find('.//h1').text
-            print idref, title
+            #title = etree.HTML(open(srchtml, 'r').read()).find('.//h1').text
+            htags = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']
+            toc_css_matches = []
+            htmlcontent = etree.HTML(open(srchtml, 'r').read())
+            # For each toc css selector spec'd for TOC.
+            for css in self.toc.keys():
+                # elements that match one of the css selectors in toc.
+                selector = cssselect.parse(self.toc[css])
+                xpath = cssselect.HTMLTranslator().selector_to_xpath(selector[0])
+                compiled_selector = etree.XPath(xpath)
+                matches = [e for e in compiled_selector(htmlcontent)]
+                # Make a list of all elements that match
+                for m in matches: toc_css_matches.append((m,css))
+
+            # Make a list of matching elements, in document order.
+            toc = []
+            for element in htmlcontent.iter():
+                for m in toc_css_matches:
+                    if element in m:
+                        toc.append((element, m[1]))
+
+            # build nested <ol> for the toc
+            # parse a text representation
+            toc_str = []
+            toc_html = etree.Element('ol')
+            current_depth = 0
+            current_parent = toc_html
+            for t in toc:
+#               if t[1] >= current_depth:
+#                   current_depth = t[1]
+#                   li = etree.Element('li')
+#                   li.text = t[0].text
+#                   if current_parent is not None:
+#                       current_parent.append(li)
+
+#               elif t[1] < current_depth:
+#                   current_depth = t[1]
+#                   current_parent = current_parent.getparent()
+#                   if current_parent is not None:
+#                       ol = etree.Element('ol')
+#                       li = etree.Element('li')
+#                       li.text = t[0].text
+#                       ol.append(li)
+#                       current_parent.append(ol)
+
+
+
+
+                    
+
+
+
+                toc_str.append('-'*(t[1]-1) + r"{text}".format(text = t[0].text))
+
+
+
+
+            print '\n'.join(toc_str)
+#           print etree.tostring(toc_html)
+
+
+            
+
         
 
         
