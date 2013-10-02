@@ -28,6 +28,7 @@ import logging
 import time
 import mimetypes
 import sys
+import copy
 
 from lxml import etree
 import re
@@ -181,42 +182,41 @@ class Epub:
             # build nested <ol> for the toc
             # parse a text representation
             toc_str = []
-            toc_html = etree.Element('ol')
-            current_depth = 0
-            current_parent = toc_html
+            toc_html = []
             for t in toc:
-#               if t[1] >= current_depth:
-#                   current_depth = t[1]
-#                   li = etree.Element('li')
-#                   li.text = t[0].text
-#                   if current_parent is not None:
-#                       current_parent.append(li)
+                ol = etree.Element('ol')
+                li = etree.Element('li')
+                ol.append(li)
+                li.append(t[0])
+                toc_html.append((t[1], ol))
+                toc_str.append('-'*(t[1]) + r"{text}".format(text = t[0].text))
+            
+            
+            i = len(toc_html) - 1
+            for entry in reversed(toc_html):
+                level = entry[0]
+                element = entry[1]
+                element.tail=None
 
-#               elif t[1] < current_depth:
-#                   current_depth = t[1]
-#                   current_parent = current_parent.getparent()
-#                   if current_parent is not None:
-#                       ol = etree.Element('ol')
-#                       li = etree.Element('li')
-#                       li.text = t[0].text
-#                       ol.append(li)
-#                       current_parent.append(ol)
+                if i > 0:
+                    if level == toc_html[i-1][0]:
+                        for li in element:
+                            toc_html[i-1][1][0].append(li)
 
-
-
-
-                    
-
-
-
-                toc_str.append('-'*(t[1]-1) + r"{text}".format(text = t[0].text))
+                    elif level > toc_html[i-1][0]:
+                        li = toc_html[i-1][1][-1]
+                        li.append(element)
+                i -= 1
 
 
-
+            print len(toc_html) 
 
             print '\n'.join(toc_str)
-#           print etree.tostring(toc_html)
-
+            print '----------------'
+            for t in toc_html: print etree.tostring(t[1], pretty_print=True, method='html')
+            print '----------------'
+            #print etree.tostring(toc_html, pretty_print=True, method='html')
+            print
 
             
 
