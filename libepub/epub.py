@@ -240,12 +240,14 @@ class Epub:
 
             # finally merge similar <ol> together.
             toc_html = toc_html[0][1]
-            for ol in toc_html.findall('.//ol'):
-                if ol.getnext() is not None:
-                    # if two <ol> items are siblings
-                    if ol.getnext().tag == 'ol':
-                        for li in ol.getnext():
-                            ol.append(li)
+#           for ol in toc_html.findall('.//ol'):
+#               if ol.getnext() is not None:
+#                   # if two <ol> items are siblings
+#                   if ol.getnext().tag == 'ol':
+#                       for li in ol.getnext():
+#                           ol.append(li)
+#                       if len(ol.getnext()) == 0:
+#                           ol.getparent().remove(ol.getnext())
 
             ol = etree.Element('ol')
             ol.append(toc_html)
@@ -254,7 +256,19 @@ class Epub:
             # add a toplevel ordered list
             navelement = self.nav.find('.//nav')
             navelement.append(ol)
-            print etree.tostring(self.nav, pretty_print=True, method='html') 
+        
+# 
+        while any([o.tag == o.getnext().tag for o in self.nav.findall('.//ol') if o.getnext() is not None]):
+            for ol in self.nav.findall('.//ol'):
+                if ol.getnext() is not None:
+                    # if two <ol> items are siblings
+                    if ol.getnext().tag == 'ol':
+                        for li in ol.getnext():
+                            ol.append(li)
+                        if len(ol.getnext()) == 0:
+                            ol.getparent().remove(ol.getnext())
+
+        print etree.tostring(self.nav, pretty_print=True, method='html') 
 
         
 
