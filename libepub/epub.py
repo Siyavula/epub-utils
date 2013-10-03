@@ -44,6 +44,8 @@ except ImportError:
     print "cssselect not found!"
     sys.exit(1)
 
+
+
 class Epub:
     ''' Wrapper class for representing an epub.'''
     def __init__(self, **kwargs):
@@ -132,15 +134,15 @@ class Epub:
 
     def create_nav(self):
         '''Uses all the html files and creates a nav tree'''
-        nav = etree.HTML('''<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
-        <head>
-            <meta charset="utf-8"/>
-            <title>Table of Contents</title><
-        </head>
-        <body>        
-            <nav epub:type="toc" id="toc"></nav>
-        </body>
-    </html>''')
+        self.nav = etree.HTML('''<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<head>
+    <meta charset="utf-8"/>
+    <title>Table of Contents</title><
+</head>
+<body>        
+    <nav epub:type="toc" id="toc"></nav>
+</body>
+</html>''')
 
         # Read each spine entry, they contain references to ids in the manifest.
         spineitems = self.package.findall('.//spine/itemref')
@@ -155,11 +157,8 @@ class Epub:
             # find in self.html_source_paths the one that matches this one.
             srchtml = [h for h in self.html_source_paths if h in html.attrib.get('href')][0]
 
-            ol = etree.Element('ol')
 
             # read the HTML file and extract the title
-            #title = etree.HTML(open(srchtml, 'r').read()).find('.//h1').text
-            htags = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']
             toc_css_matches = []
             htmlcontent = etree.HTML(open(srchtml, 'r').read())
             # For each toc css selector spec'd for TOC.
@@ -170,7 +169,8 @@ class Epub:
                 compiled_selector = etree.XPath(xpath)
                 matches = [e for e in compiled_selector(htmlcontent)]
                 # Make a list of all elements that match
-                for m in matches: toc_css_matches.append((m,css))
+                for m in matches:
+                    toc_css_matches.append((m,css))
 
             # Make a list of matching elements, in document order.
             toc = []
@@ -180,45 +180,81 @@ class Epub:
                         toc.append((element, m[1]))
 
             # build nested <ol> for the toc
-            # parse a text representation
             toc_str = []
             toc_html = []
             for t in toc:
-                ol = etree.Element('ol')
                 li = etree.Element('li')
-                ol.append(li)
+                t[0].tail = None
                 li.append(t[0])
-                toc_html.append((t[1], ol))
+                toc_html.append((t[1], li))
                 toc_str.append('-'*(t[1]) + r"{text}".format(text = t[0].text))
             
+            # move forward through the list and put <li> in <ol> if previous one has different level
+            level = 0
+            for i, entry in enumerate(toc_html):
+                if entry[0] != level:
+                    level = entry[0]
+                    ol = etree.Element('ol')
+                    ol.append(entry[1])
+                    toc_html[i] = (level, ol)
+
+            # while there are any <li> in the list, add them to 
+            li_in_list = any([t[1].tag == 'li' for t in toc_html])
+            while li_in_list:
+                for i, t in enumerate(toc_html):
+                    level = t[0]
+                    el = t[1]
+                    if i > 0:
+                        if el.tag == 'li':
+                            if toc_html[i-1][1].tag == 'ol':
+                                if level == toc_html[i-1][0]:
+                                    toc_html[i-1][1].append(el)
+                                    del toc_html[i]
+
+
+                li_in_list = any([t[1].tag == 'li' for t in toc_html])
+
+            # go through the list in reverse and add same level li together
+            while len(toc_html) > 1:
+                i = len(toc_html) - 1
+                for entry in reversed(toc_html):
+                    level = entry[0]
+                    if i > 0:
+                        # add similar levels together
+                        if level == toc_html[i-1][0]:
+                            ol = toc_html[i-1][1]
+                            for li in entry[1]:
+                                ol.append(li)
+
+                            del toc_html[i]
+
+                        # if the next level is lower, add this <ol> to the last <li> of the next
+                        if level > toc_html[i-1][0]:
+                            toc_html[i-1][1][-1].append(toc_html[i][1])
+                            del toc_html[i]
+
+                    i -= 1
+
+                
+
+
+            # finally merge similar <ol> together.
+            toc_html = toc_html[0][1]
+            for ol in toc_html.findall('.//ol'):
+                if ol.getnext() is not None:
+                    # if two <ol> items are siblings
+                    if ol.getnext().tag == 'ol':
+                        for li in ol.getnext():
+                            ol.append(li)
+
+            ol = etree.Element('ol')
+            ol.append(toc_html)
+            toc_html = ol
             
-            i = len(toc_html) - 1
-            for entry in reversed(toc_html):
-                level = entry[0]
-                element = entry[1]
-                element.tail=None
-
-                if i > 0:
-                    if level == toc_html[i-1][0]:
-                        for li in element:
-                            toc_html[i-1][1][0].append(li)
-
-                    elif level > toc_html[i-1][0]:
-                        li = toc_html[i-1][1][-1]
-                        li.append(element)
-                i -= 1
-
-
-            print len(toc_html) 
-
-            print '\n'.join(toc_str)
-            print '----------------'
-            for t in toc_html: print etree.tostring(t[1], pretty_print=True, method='html')
-            print '----------------'
-            #print etree.tostring(toc_html, pretty_print=True, method='html')
-            print
-
-            
+            # add a toplevel ordered list
+            navelement = self.nav.find('.//nav')
+            navelement.append(ol)
+            print etree.tostring(self.nav, pretty_print=True, method='html') 
 
         
 
