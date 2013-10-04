@@ -50,6 +50,7 @@ class Epub:
     ''' Wrapper class for representing an epub.'''
     def __init__(self, **kwargs):
         self.html_source_paths = []
+        self.html_source = []
         self.img_source_paths = []
         self._manifest_ids_ = []
         self.js_source_paths = []
@@ -79,10 +80,12 @@ class Epub:
         '''Given a list containing the paths to html files, add them to the epub object.
         i.e. update the manifest file
         '''
-        # add the paths of the  html files
+        # parse and add the content of the  html files as etree objects
         for htmlfile in htmlfiles:
             source_path = os.path.normpath(htmlfile)
+            content = etree.HTML(open(source_path, 'r').read())
             self.html_source_paths.append(source_path)
+            self.html_source.append(content)
             images = self._find_images_in_html(htmlfile)
             for image in images: self.img_source_paths.append(image)
        
@@ -156,11 +159,12 @@ class Epub:
             
             # find in self.html_source_paths the one that matches this one.
             srchtml = [h for h in self.html_source_paths if h in html.attrib.get('href')][0]
-
+            # the index of the html source code in self.html_source
+            index = self.html_source_paths.index(srchtml)
 
             # read the HTML file and extract the title
             toc_css_matches = []
-            htmlcontent = etree.HTML(open(srchtml, 'r').read())
+            htmlcontent = self.html_source[index]
             # For each toc css selector spec'd for TOC.
             for css in self.toc.keys():
                 # elements that match one of the css selectors in toc.
@@ -174,18 +178,34 @@ class Epub:
 
             # Make a list of matching elements, in document order.
             toc = []
+            toc_ids = []
+            Id = 0
             for element in htmlcontent.iter():
                 for m in toc_css_matches:
                     if element in m:
-                        toc.append((element, m[1]))
+                        # create some unique IDs for the toc elements if they don't have them
+                        if element.attrib.get('id') is None:
+                            element_id = "toc-id-{Id}".format(Id=Id)
+                            while element_id in toc_ids:
+                                Id += 1
+                                element_id = "toc-id-{Id}".format(Id=Id)
+                            element.attrib['id'] = element_id
+                        else:
+                            element_id = element.attrib.get('id')
+                        
+                        toc_ids.append(element_id)
+                        toc.append((element, m[1], element_id))
 
             # build nested <ol> for the toc
             toc_str = []
             toc_html = []
             for t in toc:
                 li = etree.Element('li')
-                t[0].tail = None
-                li.append(t[0])
+                text = ''.join([tt for tt in t[0].itertext()])
+                a = etree.Element('a')
+                a.text = text
+                a.attrib['href'] = srchtml + '#{Id}'.format(Id=t[2])
+                li.append(a)
                 toc_html.append((t[1], li))
                 toc_str.append('-'*(t[1]) + r"{text}".format(text = t[0].text))
             
@@ -211,7 +231,6 @@ class Epub:
                                     toc_html[i-1][1].append(el)
                                     del toc_html[i]
 
-
                 li_in_list = any([t[1].tag == 'li' for t in toc_html])
 
             # go through the list in reverse and add same level li together
@@ -225,30 +244,16 @@ class Epub:
                             ol = toc_html[i-1][1]
                             for li in entry[1]:
                                 ol.append(li)
-
                             del toc_html[i]
 
                         # if the next level is lower, add this <ol> to the last <li> of the next
                         if level > toc_html[i-1][0]:
                             toc_html[i-1][1][-1].append(toc_html[i][1])
                             del toc_html[i]
-
                     i -= 1
-
-                
-
 
             # finally merge similar <ol> together.
             toc_html = toc_html[0][1]
-#           for ol in toc_html.findall('.//ol'):
-#               if ol.getnext() is not None:
-#                   # if two <ol> items are siblings
-#                   if ol.getnext().tag == 'ol':
-#                       for li in ol.getnext():
-#                           ol.append(li)
-#                       if len(ol.getnext()) == 0:
-#                           ol.getparent().remove(ol.getnext())
-
             ol = etree.Element('ol')
             ol.append(toc_html)
             toc_html = ol
@@ -257,7 +262,6 @@ class Epub:
             navelement = self.nav.find('.//nav')
             navelement.append(ol)
         
-# 
         while any([o.tag == o.getnext().tag for o in self.nav.findall('.//ol') if o.getnext() is not None]):
             for ol in self.nav.findall('.//ol'):
                 if ol.getnext() is not None:
@@ -267,11 +271,6 @@ class Epub:
                             ol.append(li)
                         if len(ol.getnext()) == 0:
                             ol.getparent().remove(ol.getnext())
-
-        print etree.tostring(self.nav, pretty_print=True, method='html') 
-
-        
-
         
         return
 
@@ -303,6 +302,7 @@ class Epub:
                         scripttype = mimetypes.guess_type(src)[0]
                         if scripttype == 'text/css':
                             css_resources = self._get_css_resources(os.path.normpath(os.path.join(os.path.dirname(hf), src)))
+                            self.css_source_paths.append(src)
                             # Add css resources to the manifest
                             for cs in css_resources:
                                 if cs not in included_src:
@@ -414,3 +414,32 @@ class Epub:
             manifest.append(manifestitem)
 
         return
+
+
+    def write(self):
+        '''Write the unzipped epub to the output folder'''
+
+        # check if outputfolder exists
+        #if not os.path.exists(self.outputfolder):
+        #    os.
+
+
+
+        print self.epub_output_folder
+        print len(self.html_source_paths)
+        print len(self.html_source)
+        print 
+        print self.css_source_paths
+
+        # write the html source in self.html_source (with the ids) to their output folders.
+        for i, src in enumerate(self.html_source_paths):
+            # find the calculated outputfolder in the manifest
+            for item in self.package.findall('.//manifest/item'):
+                outputfolder = item.attrib['href']
+                if src in outputfolder:
+                    if not os.path.exists(os.path.dirname(outputfolder)):
+                        print src, outputfolder
+                    break
+
+
+
