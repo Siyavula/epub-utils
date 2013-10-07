@@ -103,7 +103,7 @@ class Epub:
         images = []
         HTML = etree.HTML(open(htmlfile, 'r').read())
         for img in HTML.findall('.//img'):
-            src = os.path.normpath(os.path.join(htmlfile, img.attrib.get('src')))
+            src = os.path.normpath(os.path.join(os.path.dirname(htmlfile), img.attrib.get('src')))
             if src is not None:
                 if r'http:' in src:
                     if self.verbose: logging.warn("Skipping http link to image" + src)
@@ -271,7 +271,14 @@ class Epub:
                             ol.append(li)
                         if len(ol.getnext()) == 0:
                             ol.getparent().remove(ol.getnext())
-        
+       
+
+        # add nav to package file.
+        navpath = os.path.normpath(os.path.join('xhtml', self.epubname, "{name}.nav.xhtml".format(name=self.epubname)))
+        manifestitem = self.create_manifest_item(navpath, "application/xhtml+xml")
+        manifest = self.package.find('.//manifest')
+        manifest.append(manifestitem)
+
         return
 
 
@@ -302,13 +309,15 @@ class Epub:
                         scripttype = mimetypes.guess_type(src)[0]
                         if scripttype == 'text/css':
                             css_resources = self._get_css_resources(os.path.normpath(os.path.join(os.path.dirname(hf), src)))
-                            self.css_source_paths.append(src)
+                            self.css_source_paths.append(os.path.normpath(os.path.join('xhtml', self.epubname, hf, src)))
+#                           print os.path.normpath(os.path.join(hf, src))
                             # Add css resources to the manifest
                             for cs in css_resources:
                                 if cs not in included_src:
-                                    included_src.append(cs)
+                                    cspath = os.path.normpath(os.path.join('xhtml', self.epubname, cs))
+                                    included_src.append(cspath)
                                     srctype = mimetypes.guess_type(cs)[0]
-                                    manifestitem = self.create_manifest_item(cs, srctype)
+                                    manifestitem = self.create_manifest_item(cspath, srctype)
                                     manifest.append(manifestitem)
 
 
@@ -419,27 +428,15 @@ class Epub:
     def write(self):
         '''Write the unzipped epub to the output folder'''
 
-        # check if outputfolder exists
-        #if not os.path.exists(self.outputfolder):
-        #    os.
+        allitems = []
+        # the paths in the manifest have an added "xhtml/epubname/" compared to the 
+        # location of the files from the current folder.
 
+        for item in self.package.findall('.//manifest/item'):
+            dest = os.path.join(self.epub_output_folder, 'EPUB', item.attrib['href'])
+            allitems.append(dest)
+            print dest
+            print " " + os.path.sep.join(item.attrib['href'].split(os.path.sep)[2:])
+            print
 
-
-        print self.epub_output_folder
-        print len(self.html_source_paths)
-        print len(self.html_source)
-        print 
-        print self.css_source_paths
-
-        # write the html source in self.html_source (with the ids) to their output folders.
-        for i, src in enumerate(self.html_source_paths):
-            # find the calculated outputfolder in the manifest
-            for item in self.package.findall('.//manifest/item'):
-                outputfolder = item.attrib['href']
-                if src in outputfolder:
-                    if not os.path.exists(os.path.dirname(outputfolder)):
-                        print src, outputfolder
-                    break
-
-
-
+        print len(allitems), len(set(allitems))
