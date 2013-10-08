@@ -63,7 +63,7 @@ if __name__ == "__main__":
             2:'div.section > h2.title',
             3:'div.section > h3.title'
             },
-        verbose=False)
+        verbose=True)
 
     myEpub.addhtml(htmlfiles)
     myEpub.write()
