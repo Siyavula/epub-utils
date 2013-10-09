@@ -66,10 +66,10 @@ class resources:
         '''adds a resource to the container and gives it a unique ID. Won't add duplicate resources'''
         i = 0
         if resource not in self.resources:
-            resource_id = "resource-{num}".format(num=i)
+            resource_id = "ID-{num}".format(num=i)
             while resource_id in self._ids:
                 i += 1
-                resource_id = "resource-{num}".format(num=i)
+                resource_id = "ID-{num}".format(num=i)
 
             self._ids.append(resource_id)
             resource._id = resource_id
@@ -170,8 +170,7 @@ class Epub:
         '''Uses all the html files and creates a nav tree'''
         self.nav = etree.HTML('''<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
 <head>
-    <meta charset="utf-8"/>
-    <title>Table of Contents</title><
+    <meta charset="utf-8"></meta>
 </head>
 <body>        
     <nav epub:type="toc" id="toc"></nav>
@@ -189,13 +188,14 @@ class Epub:
             html = [m for m in manifest if m.attrib.get('id') == idref][0]
             
             # find in self.html_source_paths the one that matches this one.
-#           srchtml = [h for h in self.html_source_paths if h in html.attrib.get('href')][0]
             srchtml = [res.src for res in self.resources.resources if res.src in html.get('href')][0]
             # the index of the html source code in self.html_source
             htmlcontent = etree.HTML(open(srchtml, 'r').read())
+            # find the resource that has this id
+            thisresource = self.resources.resources[self.resources._ids.index(idref)]
+            thisresource.content = htmlcontent
             # read the HTML file and extract the title
             toc_css_matches = []
-#           htmlcontent = self.html_source[index]
             # For each toc css selector spec'd for TOC.
             for css in self.toc.keys():
                 # elements that match one of the css selectors in toc.
@@ -463,13 +463,19 @@ class Epub:
                     print "Creating folder ", os.path.dirname(r.destination)
                     os.makedirs(os.path.dirname(r.destination))
 
-                # copy file there
-                shutil.copy(r.src, r.destination)
+                # check if resource has the .content attribute
+                if hasattr(r, 'content'):
+                    # write the content to that destination
+                    with open(r.destination, 'w') as f:
+                        f.write(etree.tostring(r.content, pretty_print=True, method='xml'))
+                else:
+                    # copy file there
+                    shutil.copy(r.src, r.destination)
 
         # write the nav file
         navfile_dest = os.path.abspath(os.path.join(self.epub_output_folder, 'EPUB', 'xhtml', self.epubname, '{name}.nav.xhtml'.format(name=self.epubname)))
         with open(navfile_dest, 'w') as nf:
-            nf.write(etree.tostring(self.nav, pretty_print=True, method="html"))
+            nf.write(etree.tostring(self.nav, pretty_print=True, method="xml"))
 
         # now write the package file
         packagefile_dest = os.path.abspath(os.path.join(self.epub_output_folder, 'EPUB', "{name}-package.opf".format(name=self.epubname)))
