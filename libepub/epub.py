@@ -413,7 +413,11 @@ class Epub:
         package = etree.Element('package',
                 nsmap={None:"http://www.idpf.org/2007/opf"},
                 attrib={'version':'3.0', 'unique-identifier':'uid'})
-        metadata = etree.XML(r'''<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:language>en</dc:language></metadata>''')
+        metadata = etree.XML(r'''<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+        <dc:identifier id="uid">www.siyavula.com.epubmaker.{name}</dc:identifier>
+        <dc:title>{name}</dc:title>
+        <dc:language>en</dc:language>
+        </metadata>'''.format(name=self.epubname))
 
         manifest = etree.Element('manifest')
 
@@ -435,6 +439,9 @@ class Epub:
         # run through self.resources.resources and add everything to manifest
         for res in self.resources.resources:
             srctype = mimetypes.guess_type(res.src)[0]
+            if srctype == "text/html":
+                srctype = "application/xhtml+xml"
+
             destination = os.path.join('xhtml', self.epubname, res.src)
             res.destination = os.path.abspath(os.path.join(self.epub_output_folder, 'EPUB', destination))
             manifestitem = self.create_manifest_item(destination, srctype)
@@ -467,7 +474,8 @@ class Epub:
                 if hasattr(r, 'content'):
                     # write the content to that destination
                     with open(r.destination, 'w') as f:
-                        f.write(etree.tostring(r.content, pretty_print=True, method='xml'))
+                        if r.destination.endswith('html'):
+                            f.write(etree.tostring(r.content, pretty_print=True, method='xml').replace(r'<html>', r'<html xmlns="http://www.w3.org/1999/xhtml">'))
                 else:
                     # copy file there
                     shutil.copy(r.src, r.destination)
