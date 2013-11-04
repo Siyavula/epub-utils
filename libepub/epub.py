@@ -102,6 +102,13 @@ class Epub:
         return
 
 
+
+    def addcss_to_html(self):
+        '''Add the provided css to each html file.'''
+        pass
+
+
+
     def addhtml(self, htmlfiles):
         '''Given a list containing the paths to html files, add them to the epub object.
         i.e. update the manifest file
@@ -302,7 +309,13 @@ class Epub:
                             ol.append(li)
                         if len(ol.getnext()) == 0:
                             ol.getparent().remove(ol.getnext())
-       
+
+
+        # remove top-level ol. Prob a bug but it seems consistent.
+        firstol = self.nav.find('.//ol')
+        secondol = firstol.find('.//ol')
+        firstol.addnext(secondol)
+        firstol.getparent().remove(firstol)
 
         # add nav to package file.
         navpath = os.path.normpath(os.path.join('xhtml', self.epubname, "{name}.nav.xhtml".format(name=self.epubname)))
