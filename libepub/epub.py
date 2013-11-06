@@ -95,17 +95,17 @@ class Epub:
         else:
             self.verbose = False
         
+        if 'css' in kwargs.keys():
+            # add a css file to each html file
+            self.extra_css = kwargs['css']
+        else:
+            self.extra_css = None
+
         # how deep must the TOC reach?
         if 'toc' in kwargs.keys():
             self.toc = kwargs['toc']
 
         return
-
-
-
-    def addcss_to_html(self):
-        '''Add the provided css to each html file.'''
-        pass
 
 
 
@@ -117,9 +117,18 @@ class Epub:
         for htmlfile in htmlfiles:
             source_path = os.path.normpath(htmlfile)
             content = etree.HTML(open(source_path, 'r').read())
+            # add any extra css here.
+            if self.extra_css is not None:
+                css_rel_path = os.path.relpath(os.path.dirname(os.path.abspath(self.extra_css)), os.path.dirname(os.path.abspath(source_path)))
+                css_rel_path = os.path.join(css_rel_path, self.extra_css)
+                css = etree.XML('<link rel="stylesheet" type="text/css" href="{stylesheet}"/>'.format(stylesheet=css_rel_path))
+                head = content.find('.//head')
+                head.append(css)
+
             thisresource = resource(source_path)
+            thisresource.HTMLObject = content
             self.resources.add(thisresource)
-            images = self._find_images_in_html(htmlfile)
+            images = self._find_images_in_html(thisresource)
 
             for image in images:
                 imgresource = resource(image)
@@ -137,9 +146,9 @@ class Epub:
         '''
         # read the html contents
         images = []
-        HTML = etree.HTML(open(htmlfile, 'r').read())
+        HTML = htmlfile.HTMLObject
         for img in HTML.findall('.//img'):
-            src = os.path.normpath(os.path.join(os.path.dirname(htmlfile), img.attrib.get('src')))
+            src = os.path.normpath(os.path.join(os.path.dirname(htmlfile.src), img.attrib.get('src')))
             if src is not None:
                 if r'http:' in src:
                     if self.verbose: logging.warn("Skipping http link to image" + src)
@@ -195,9 +204,10 @@ class Epub:
             html = [m for m in manifest if m.attrib.get('id') == idref][0]
             
             # find in self.html_source_paths the one that matches this one.
+            srcres = [res for res in self.resources.resources if res.src in html.get('href')][0]
             srchtml = [res.src for res in self.resources.resources if res.src in html.get('href')][0]
             # the index of the html source code in self.html_source
-            htmlcontent = etree.HTML(open(srchtml, 'r').read())
+            htmlcontent = srcres.HTMLObject
             # find the resource that has this id
             thisresource = self.resources.resources[self.resources._ids.index(idref)]
             thisresource.content = htmlcontent
@@ -324,8 +334,63 @@ class Epub:
         manifest = self.package.find('.//manifest')
         manifest.append(manifestitem)
 
+        self.create_ncx()
+
         return
 
+
+
+    def create_ncx(self):
+        '''if the self.nav is created, also create the ncx file'''
+
+        navmap = etree.Element("navmap")
+        lastNav = None
+        lastDepth = 0
+        np = 0
+
+        for a in self.nav.findall('.//a'):
+            depth = len([aa for aa in a.iterancestors()])
+            navpoint = etree.Element('navPoint')
+            navpoint.attrib['id'] = "navpoint-{num}".format(num=np)
+            navpoint.attrib['playOrder'] = str(np + 1)
+            navlabel = etree.Element('navLabel')
+            text = etree.Element('text')
+            navpoint.append(navlabel)
+            navlabel.append(text)
+            text.text = a.text
+
+            content = etree.Element('content')
+            content.attrib['src'] = os.path.join('xhtml', self.epubname, a.attrib['href'])
+            navlabel.addnext(content)
+
+            navmap.append(navpoint)
+
+            np += 1
+            lastDepth = depth
+
+        ncx_XML = r'''<?xml version="1.0"?>
+        <!DOCTYPE ncx PUBLIC "-//NISO//DTD ncx 2005-1//EN"
+          "http://www.daisy.org/z3986/2005/ncx-2005-1.dtd">
+
+        <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+           <head>
+               <meta name="dtb:uid" content="RT8513Z9UM0NLKLF8QX9QDJ3E6ZFL2"/>
+               <meta name="dtb:depth" content="3"/>
+               <meta name="dtb:totalPageCount" content="0"/>
+               <meta name="dtb:maxPageNumber" content="0"/>
+           </head>
+           <docTitle>
+               <text>Document Title</text>
+           </docTitle>
+         {navmap}
+        </ncx>'''.format(navmap = etree.tostring(navmap, pretty_print=True))
+
+        self.ncx = etree.fromstring(ncx_XML)
+
+        # add ncx file to manifest
+        manifestitem = self.create_manifest_item('toc.ncx', 'application/x-dtbncx+xml')
+        manifest = self.package.find('.//manifest')
+        manifest.append(manifestitem)
 
 
     def _find_js_css_in_html(self):
@@ -336,7 +401,8 @@ class Epub:
             hf = res.src
             if (hf.endswith('.html')) or (hf.endswith('.xhtml')):
 
-                HTML = etree.HTML(open(hf, 'r').read())
+                HTML = res.HTMLObject
+
                 for script in HTML.findall('.//script'):
                     src = script.attrib.get('src')
                     if src is not None:
@@ -423,6 +489,8 @@ class Epub:
     
     def _create_package(self):
         '''creates an empty package xml tree'''
+        y, m, d, h, minute, s, t1,t2,t3 = time.localtime()
+        dcmetatime = etree.fromstring(r'<meta property="dcterms:modified">{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}Z</meta>'.format(y, m, d, h, minute, s))
         package = etree.Element('package',
                 nsmap={None:"http://www.idpf.org/2007/opf"},
                 attrib={'version':'3.0', 'unique-identifier':'uid'})
@@ -431,6 +499,7 @@ class Epub:
         <dc:title>{name}</dc:title>
         <dc:language>en</dc:language>
         </metadata>'''.format(name=self.epubname))
+        metadata.append(dcmetatime)
 
         manifest = etree.Element('manifest')
 
@@ -438,6 +507,9 @@ class Epub:
         package.append(manifest)
 
         self.package = package
+
+
+
 
 
     def update_package(self):
@@ -456,7 +528,7 @@ class Epub:
                 srctype = "application/xhtml+xml"
 
             destination = os.path.join('xhtml', self.epubname, res.src)
-            res.destination = os.path.abspath(os.path.join(self.epub_output_folder, 'EPUB', destination))
+            res.destination = os.path.abspath(os.path.join(self.epub_output_folder, 'OPS', destination))
             manifestitem = self.create_manifest_item(destination, srctype)
             manifest.append(manifestitem)
        
@@ -494,12 +566,16 @@ class Epub:
                     shutil.copy(r.src, r.destination)
 
         # write the nav file
-        navfile_dest = os.path.abspath(os.path.join(self.epub_output_folder, 'EPUB', 'xhtml', self.epubname, '{name}.nav.xhtml'.format(name=self.epubname)))
+        navfile_dest = os.path.abspath(os.path.join(self.epub_output_folder, 'OPS', 'xhtml', self.epubname, '{name}.nav.xhtml'.format(name=self.epubname)))
         with open(navfile_dest, 'w') as nf:
             nf.write(etree.tostring(self.nav, pretty_print=True, method="xml"))
 
+        # write the ncx file
+        with open(os.path.join(self.epub_output_folder, 'OPS', 'toc.ncx'), 'w') as f:
+            f.write(etree.tostring(self.ncx, pretty_print=True, method='xml'))
+
         # now write the package file
-        packagefile_dest = os.path.abspath(os.path.join(self.epub_output_folder, 'EPUB', "{name}-package.opf".format(name=self.epubname)))
+        packagefile_dest = os.path.abspath(os.path.join(self.epub_output_folder, 'OPS', "{name}-package.opf".format(name=self.epubname)))
         with open(packagefile_dest, 'w') as pf:
             pf.write(etree.tostring(self.package, pretty_print=True, method='xml', encoding='utf-8', xml_declaration=True))
 
@@ -518,7 +594,7 @@ class Epub:
         container_dest = os.path.abspath(os.path.join(self.epub_output_folder, 'META-INF', 'container.xml'))
 
         container = etree.XML('<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0"><rootfiles>\n</rootfiles></container>')
-        packagefilepath = "EPUB/{name}-package.opf".format(name=self.epubname)
+        packagefilepath = "OPS/{name}-package.opf".format(name=self.epubname)
  
         rootfile = etree.Element('rootfile', attrib={'media-type':"application/oebps-package+xml", 'full-path':packagefilepath})
         container.find('.//{urn:oasis:names:tc:opendocument:xmlns:container}rootfiles').append(rootfile)

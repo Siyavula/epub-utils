@@ -27,7 +27,7 @@ from libepub import epub
 
 
 
-usage_info = """Usage: epubmaker.py --output OUTPUT --name NAME FILE... | --help
+usage_info = """Usage: epubmaker.py --output OUTPUT --name NAME [--css=CSS] FILE... | --help
 
 Arguments:
     -o --output OUTPUT Folder into which to write epub
@@ -53,16 +53,17 @@ if __name__ == "__main__":
             if F.endswith(('.html', '.xhtml')):
                 htmlfiles.append(F)
 
-    htmlfiles.sort()
-
+#   htmlfiles.sort()
+    print arguments['--css']
     myEpub = epub.Epub(
         name=arguments['--name'], 
         outputfolder=arguments['--output'],
         toc={
-            1:'div.section > h1.title',
-            2:'div.section > h2.title',
-            3:'div.section > h3.title'
+            1:'body > div.section > h1.title',
+            2:'div.section > div.section > h2.title',
+            3:'div.section > div.section > div.section > h3.title'
             },
+        css=arguments['--css'],
         verbose=True)
 
     myEpub.addhtml(htmlfiles)
