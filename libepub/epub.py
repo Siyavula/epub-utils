@@ -167,6 +167,7 @@ class Epub:
         spine = self.package.find('.//spine')
         if spine is None:
             spine = etree.Element('spine')
+            spine.attrib['toc'] = 'ncx'
             manifest.addnext(spine)
         else:
             # clear it so it can be remade
@@ -331,6 +332,7 @@ class Epub:
         navpath = os.path.normpath(os.path.join('xhtml', self.epubname, "{name}.nav.xhtml".format(name=self.epubname)))
         manifestitem = self.create_manifest_item(navpath, "application/xhtml+xml")
         manifestitem.attrib['properties'] = 'nav'
+        manifestitem.attrib['id'] = 'nav'
         manifest = self.package.find('.//manifest')
         manifest.append(manifestitem)
 
@@ -343,7 +345,7 @@ class Epub:
     def create_ncx(self):
         '''if the self.nav is created, also create the ncx file'''
 
-        navmap = etree.Element("navmap")
+        navmap = etree.Element("navMap")
         lastNav = None
         lastDepth = 0
         np = 0
@@ -389,6 +391,7 @@ class Epub:
 
         # add ncx file to manifest
         manifestitem = self.create_manifest_item('toc.ncx', 'application/x-dtbncx+xml')
+        manifestitem.attrib['id'] = 'ncx'
         manifest = self.package.find('.//manifest')
         manifest.append(manifestitem)
 
