@@ -174,7 +174,7 @@ class Epub:
             spine.clear()
             
         htmlfiles = [(mi.attrib['href'], mi.attrib['id']) for mi in self.package.findall('.//manifest/item') if mi.attrib['media-type'] in ['application/xhtml+xml', 'text/html']]
-        htmlfiles.sort()
+#       htmlfiles.sort()
         for hf in htmlfiles:
             href = hf[0]
             hfid = hf[1]
@@ -342,33 +342,44 @@ class Epub:
 
 
 
+    def _xhtmlNavtoNCXNav(self, element):
+        '''Convert xhtml toc element to NCX nav element. Recurses through children'''
+        # each <ol> contains 1 or more <li> and each <li> contains <a> and zero or 1 <ol>
+
+        navPoint = etree.fromstring(r'''<navPoint><navLabel><text/></navLabel><content/></navPoint>''')
+        labeltext = navPoint.find('navLabel/text')
+        content = navPoint.find('content')
+
+        # create unique id for ncx navPoint elements
+        i = 0
+        navid = "navpoint-id-{num}".format(num=str(i))
+        while navid in self.ncx_ids:
+            i += 1
+            navid = "navpoint-id-{num}".format(num=str(i))
+        self.ncx_ids.append(navid)
+        navPoint.attrib['id'] = navid
+
+        for li in element.findall('li'):
+            a = li.find('a')
+            labeltext.text = a.text
+            content.attrib['src'] = os.path.join('xhtml', self.epubname, a.attrib['href'])
+            # weird hack to stop elements from overwriting parent values. Not sure why it works. O_o
+            navPoint = copy.deepcopy(navPoint)
+            # Recurse through children
+            for ol in li.findall('ol'):
+                navPoint.append(self._xhtmlNavtoNCXNav(ol))
+
+        return navPoint
+
     def create_ncx(self):
         '''if the self.nav is created, also create the ncx file'''
-
+        self.ncx_ids = []
         navmap = etree.Element("navMap")
-        lastNav = None
-        lastDepth = 0
-        np = 0
+        navOl = [ol for ol in self.nav.findall('.//body/nav/ol')]
+        navpoints = [self._xhtmlNavtoNCXNav(ol) for ol in navOl]
 
-        for a in self.nav.findall('.//a'):
-            depth = len([aa for aa in a.iterancestors()])
-            navpoint = etree.Element('navPoint')
-            navpoint.attrib['id'] = "navpoint-{num}".format(num=np)
-            navpoint.attrib['playOrder'] = str(np + 1)
-            navlabel = etree.Element('navLabel')
-            text = etree.Element('text')
-            navpoint.append(navlabel)
-            navlabel.append(text)
-            text.text = a.text
-
-            content = etree.Element('content')
-            content.attrib['src'] = os.path.join('xhtml', self.epubname, a.attrib['href'])
-            navlabel.addnext(content)
-
-            navmap.append(navpoint)
-
-            np += 1
-            lastDepth = depth
+        for np in navpoints:
+            navmap.append(np)
 
         ncx_XML = r'''<?xml version="1.0"?>
         <!DOCTYPE ncx PUBLIC "-//NISO//DTD ncx 2005-1//EN"
@@ -376,7 +387,7 @@ class Epub:
 
         <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
            <head>
-               <meta name="dtb:uid" content="RT8513Z9UM0NLKLF8QX9QDJ3E6ZFL2"/>
+               <meta name="dtb:uid" content="www.siyavula.com.epubmaker.{name}"/>
                <meta name="dtb:depth" content="3"/>
                <meta name="dtb:totalPageCount" content="0"/>
                <meta name="dtb:maxPageNumber" content="0"/>
@@ -385,7 +396,7 @@ class Epub:
                <text>Document Title</text>
            </docTitle>
          {navmap}
-        </ncx>'''.format(navmap = etree.tostring(navmap, pretty_print=True))
+        </ncx>'''.format(navmap = etree.tostring(navmap, pretty_print=True), name=self.epubname)
 
         self.ncx = etree.fromstring(ncx_XML)
 

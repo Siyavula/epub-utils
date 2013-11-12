@@ -68,6 +68,4 @@ if __name__ == "__main__":
 
     myEpub.addhtml(htmlfiles)
     myEpub.write()
-#   print(etree.tostring(myEpub.package, pretty_print=True))
-#   print "TODO: create the nav file and add it to package"
 
