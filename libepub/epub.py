@@ -50,6 +50,7 @@ class resource:
     '''Container object for manifest resources'''
     def __init__(self, src):
         self.src = src
+        self.destination = None
     
     def __eq__(self, other):
         return (self.src == other.src) 
@@ -101,6 +102,11 @@ class Epub:
         else:
             self.extra_css = None
 
+        if 'mathjax' in kwargs.keys():
+            self.MathJax = True
+        else:
+            self.MathJax = False
+
         # how deep must the TOC reach?
         if 'toc' in kwargs.keys():
             self.toc = kwargs['toc']
@@ -117,6 +123,13 @@ class Epub:
         for htmlfile in htmlfiles:
             source_path = os.path.normpath(htmlfile)
             content = etree.HTML(open(source_path, 'r').read())
+
+            
+            # Add Mathjax if the flag is set
+
+            if self.MathJax == True:
+                content = self.add_mathjax_to_html(content)
+
             # add any extra css here.
             if self.extra_css is not None:
                 css_rel_path = os.path.relpath(os.path.dirname(os.path.abspath(self.extra_css)), os.path.dirname(os.path.abspath(source_path)))
@@ -256,7 +269,8 @@ class Epub:
                 a.attrib['href'] = srchtml + '#{Id}'.format(Id=t[2])
                 li.append(a)
                 toc_html.append((t[1], li))
-                toc_str.append('-'*(t[1]) + r"{text}".format(text = t[0].text))
+                titletext = "".join([ttt for ttt in t[0].itertext()]).encode('utf-8')
+                toc_str.append('-'*(t[1]) + r"{text}".format(text=titletext ))
             
             # move forward through the list and put <li> in <ol> if previous one has different level
             level = 0
@@ -322,6 +336,7 @@ class Epub:
                             ol.getparent().remove(ol.getnext())
 
 
+
         # remove top-level ol. Prob a bug but it seems consistent.
         firstol = self.nav.find('.//ol')
         secondol = firstol.find('.//ol')
@@ -339,6 +354,26 @@ class Epub:
         self.create_ncx()
 
         return
+
+
+    def add_mathjax_to_html(self, html):
+        '''Adds MathJax this given html etree element and to the manifest if it is not there yet.'''
+       #print "TODO: Wire in MathJax"
+       #mathjax_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'resources', 'mathjax'))
+       #for dirpath, dirname, filename in os.walk(mathjax_path):
+       #    for f in filename:
+       #        src = os.path.join(dirpath, f)
+       #        epubdest = os.path.join('mathjax', os.path.sep.join(dirname), f)
+       #        destination = os.path.join(os.curdir, self.epub_output_folder, 'OPS', epubdest)
+       #        destination_dir = os.path.dirname(destination)
+       #        if not os.path.isdir(destination_dir):
+       #            os.makedirs(destination_dir)
+
+       #        shutil.copy(src, destination)
+
+       #        # add to manifest
+
+        return html
 
 
 
@@ -405,6 +440,8 @@ class Epub:
         manifestitem.attrib['id'] = 'ncx'
         manifest = self.package.find('.//manifest')
         manifest.append(manifestitem)
+
+
 
 
     def _find_js_css_in_html(self):
@@ -538,6 +575,19 @@ class Epub:
         # run through self.resources.resources and add everything to manifest
         for res in self.resources.resources:
             srctype = mimetypes.guess_type(res.src)[0]
+
+            # can't always guess it.
+            if srctype is None:
+                if res.src.endswith('.eot'):
+                    srctype = "application/vnd.ms-fontobject"
+                elif (res.src.endswith('.ttf')) or (res.src.endswith('.otf')):
+                    srctype = "application/octet-stream"
+                elif res.src.endswith('.woff'):
+                    srctype = "application/font-woff"
+                else:
+                    print "Cannot guess mimetype for ", res.src
+                    print "Exiting..."
+                    sys.exit(1)
             if srctype == "text/html":
                 srctype = "application/xhtml+xml"
 
