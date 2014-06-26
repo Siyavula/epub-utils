@@ -30,6 +30,7 @@ import mimetypes
 import sys
 import copy
 import shutil
+import errno
 
 from lxml import etree
 import re
@@ -44,6 +45,20 @@ try:
 except ImportError:
     print "cssselect not found!"
     sys.exit(1)
+
+
+
+
+def mkdir_p(path):
+    ''' mkdir -p functionality
+    from http://stackoverflow.com/questions/600268/mkdir-p-functionality-in-python
+    ''' 
+    try:
+        os.makedirs(path)
+    except OSError as exc: # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else: raise
 
 
 class resource:
@@ -126,7 +141,6 @@ class Epub:
 
             
             # Add Mathjax if the flag is set
-
             if self.MathJax == True:
                 content = self.add_mathjax_to_html(content)
 
@@ -356,22 +370,50 @@ class Epub:
         return
 
 
+
+    def _remove_mathjax_script(self, html):
+        ''' given etree Element, removes the script element that calls mathjax'''
+        remove = []
+        for script in html.findall('.//script'):
+            if 'MathJax.js' in script.attrib['src']:
+                remove.append(script)
+        for r in remove:
+            r.getparent().remove(r)
+
+        # add a new script element for where mathjax lives.
+        head = html.find('.//head')
+        script = etree.fromstring(r'<script type="text/javascript" src="mathjax/MathJax.js?config=TeX-AMS-MML_HTMLorMML"> </script>')
+        head.append(script)
+
+        return html
+
+
     def add_mathjax_to_html(self, html):
         '''Adds MathJax this given html etree element and to the manifest if it is not there yet.'''
        #print "TODO: Wire in MathJax"
-       #mathjax_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'resources', 'mathjax'))
-       #for dirpath, dirname, filename in os.walk(mathjax_path):
-       #    for f in filename:
-       #        src = os.path.join(dirpath, f)
-       #        epubdest = os.path.join('mathjax', os.path.sep.join(dirname), f)
-       #        destination = os.path.join(os.curdir, self.epub_output_folder, 'OPS', epubdest)
-       #        destination_dir = os.path.dirname(destination)
-       #        if not os.path.isdir(destination_dir):
-       #            os.makedirs(destination_dir)
+        mathjax_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'resources', 'mathjax'))
 
-       #        shutil.copy(src, destination)
+        for dirpath, dirname, filename in os.walk(mathjax_path):
+            for f in filename:
+                src = os.path.join(dirpath, f)
+                # html contains link to mathjax, remove it
+                html = self._remove_mathjax_script(html)
+                
+                # want to copy all the mathjax files to the OPS folder
+                # i.e. OPS/mathjax
 
-       #        # add to manifest
+                OPS_path = os.path.join(self.epub_output_folder, 'OPS')
+                destination = os.path.join(OPS_path, os.path.relpath(src, os.path.join(mathjax_path, '..')))
+                # add file to manifest
+                this_resource = resource(os.path.relpath(src, os.path.join(mathjax_path, '..')))
+                self.resources.add(this_resource)
+
+
+
+                
+                 
+
+                
 
         return html
 
@@ -574,7 +616,12 @@ class Epub:
 
         # run through self.resources.resources and add everything to manifest
         for res in self.resources.resources:
+            if '?' in res.src:
+                res.src = res.src[0:res.src.index('?')]
             srctype = mimetypes.guess_type(res.src)[0]
+
+
+            
 
             # can't always guess it.
             if srctype is None:
