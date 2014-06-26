@@ -27,7 +27,7 @@ from libepub import epub
 
 
 
-usage_info = """Usage: epubmaker.py --output OUTPUT --name NAME [--css=CSS] FILE... | --help
+usage_info = """Usage: epubmaker.py --output OUTPUT --name NAME [--css=CSS] [--MathJax] FILE... | --help
 
 Arguments:
     -o --output OUTPUT Folder into which to write epub
@@ -55,15 +55,21 @@ if __name__ == "__main__":
 
 #   htmlfiles.sort()
     print arguments['--css']
+    print arguments['--MathJax']
     myEpub = epub.Epub(
         name=arguments['--name'], 
         outputfolder=arguments['--output'],
         toc={
-            1:'body > div.section > h1.title',
-            2:'div.section > div.section > h2.title',
-            3:'div.section > div.section > div.section > h3.title'
+            1: 'h1',
+            2: 'h2',
+            3: 'h3'
+# for siyavula workbooks. TODO fix this crap
+#           1:'body > div.section > h1.title',
+#           2:'div.section > div.section > h2.title',
+#           3:'div.section > div.section > div.section > h3.title'
             },
         css=arguments['--css'],
+        mathjax=arguments['--MathJax'],
         verbose=True)
 
     myEpub.addhtml(htmlfiles)
