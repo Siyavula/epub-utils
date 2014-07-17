@@ -66,9 +66,17 @@ class resource:
     def __init__(self, src):
         self.src = src
         self.destination = None
+
+        self.clean_src()
     
     def __eq__(self, other):
         return (self.src == other.src) 
+
+    def clean_src(self):
+        '''cleans the src'''
+
+        # clean out any newline characters in the src string
+        self.src = self.src.replace('\n', '')
 
 
 
@@ -371,7 +379,7 @@ class Epub:
 
 
 
-    def _remove_mathjax_script(self, html):
+    def _remove_and_add_mathjax_script(self, html):
         ''' given etree Element, removes the script element that calls mathjax'''
         remove = []
         for script in html.findall('.//script'):
@@ -390,14 +398,20 @@ class Epub:
 
     def add_mathjax_to_html(self, html):
         '''Adds MathJax this given html etree element and to the manifest if it is not there yet.'''
-       #print "TODO: Wire in MathJax"
         mathjax_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'resources', 'mathjax'))
+        use_local_mathjax = False
+
+        # check if mathjax exists in the current folder
+        if os.path.exists('mathjax'):
+            logging.warning(" MathJax found in current folder, using that")
+            mathjax_path = os.path.abspath(os.path.join(os.curdir, 'mathjax'))
+            use_local_mathjax = True
 
         for dirpath, dirname, filename in os.walk(mathjax_path):
             for f in filename:
                 src = os.path.join(dirpath, f)
                 # html contains link to mathjax, remove it
-                html = self._remove_mathjax_script(html)
+                html = self._remove_and_add_mathjax_script(html)
                 
                 # want to copy all the mathjax files to the OPS folder
                 # i.e. OPS/mathjax
@@ -408,12 +422,19 @@ class Epub:
                 this_resource = resource(os.path.relpath(src, os.path.join(mathjax_path, '..')))
                 self.resources.add(this_resource)
 
+                # must copy to the current folder, if it does not exist
+                if use_local_mathjax == False:
+                    #   copy mathjax to current folder.
+                    local_dest = os.path.relpath(src, os.path.join(mathjax_path, '..'))
+                    mkdir_p(os.path.dirname(local_dest))
+                    shutil.copy(src, local_dest)
+                    
+                
 
 
                 
-                 
 
-                
+
 
         return html
 
