@@ -60,13 +60,13 @@ if __name__ == "__main__":
         name=arguments['--name'], 
         outputfolder=arguments['--output'],
         toc={
-            1: 'h1',
-            2: 'h2',
-            3: 'h3'
+#           1: 'h1',
+#           2: 'h2',
+#           3: 'h3'
 # for siyavula workbooks. TODO fix this crap
-#           1:'body > div.section > h1.title',
-#           2:'div.section > div.section > h2.title',
-#           3:'div.section > div.section > div.section > h3.title'
+            1:'body > div.section > h1.title',
+            2:'div.section > div.section > h2.title',
+            3:'div.section > div.section > div.section > h3.title'
             },
         css=arguments['--css'],
         mathjax=arguments['--MathJax'],
