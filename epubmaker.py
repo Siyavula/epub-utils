@@ -2,20 +2,12 @@
 
 #
 # Create an epub from html files or folders containing html files.
-# 
-# 
+#
+#
 
 import sys
 import os
-import time
-import mimetypes
-import shutil
-
-try:
-    from lxml import etree
-except ImportError:
-    print "lxml not found!"
-    sys.exit(1)
+import ast
 
 try:
     from docopt import docopt
@@ -26,20 +18,22 @@ except ImportError:
 from libepub import epub
 
 
-
-usage_info = """Usage: epubmaker.py --output OUTPUT --name NAME [--css=CSS] [--MathJax] FILE... | --help
+usage_info = """Usage: epubmaker.py --output OUTPUT --name NAME [--css=CSS]
+[--MathJax] [--toc=TOC] FILE... | --help
 
 Arguments:
     -o --output OUTPUT Folder into which to write epub
-    -n --name NAME     Name to give the epub 
+    -n --name NAME     Name to give the epub
     -h --help          Print this help message
-
+    --css=CSS          use css file
+    --toc=TOC          specify css selectors to use for table of contents in
+                       python dict format.
+                       default:  "1: 'h1', 2: 'h2', 3: 'h3'"
 """
 
 
 if __name__ == "__main__":
     arguments = docopt(usage_info, sys.argv[1:])
-    print arguments
     htmlfiles = []
     for F in arguments['FILE']:
         # If it is a folder
@@ -54,24 +48,33 @@ if __name__ == "__main__":
                 htmlfiles.append(F)
 
 #   htmlfiles.sort()
-    print arguments['--css']
-    print arguments['--MathJax']
+
+    if arguments['--toc']:
+        toc = "{{{t}}}".format(t=arguments["--toc"])
+        try:
+            toc = ast.literal_eval(toc)
+        except:
+            print("TOC not specified in valid python dictionary syntax")
+            print(toc)
+            sys.exit(1)
+    else:
+        toc = {1: 'h1', 2: 'h2', 3: 'h3'}
+
     myEpub = epub.Epub(
-        name=arguments['--name'], 
+        name=arguments['--name'],
         outputfolder=arguments['--output'],
-        toc={
+        toc=toc,
 #           1: 'h1',
 #           2: 'h2',
 #           3: 'h3'
 # for siyavula workbooks. TODO fix this crap
-            1:'body > div.section > h1.title',
-            2:'div.section > div.section > h2.title',
-            3:'div.section > div.section > div.section > h3.title'
-            },
+#           1: 'body > div.section > h1.title',
+#           2: 'div.section > div.section > h2.title',
+#           3: 'div.section > div.section > div.section > h3.title'
+#           }
         css=arguments['--css'],
         mathjax=arguments['--MathJax'],
-        verbose=True)
+        verbose=False)
 
     myEpub.addhtml(htmlfiles)
     myEpub.write()
-
