@@ -89,7 +89,8 @@ class resources:
         self.resources = []
 
     def add(self, resource):
-        '''adds a resource to the container and gives it a unique ID. Won't add duplicate resources'''
+        '''adds a resource to the container and gives it a unique ID. Won't add
+        duplicate resources'''
         i = 0
         if resource not in self.resources:
             resource_id = "ID-{num}".format(num=i)
@@ -141,8 +142,8 @@ class Epub:
         return
 
     def addhtml(self, htmlfiles):
-        '''Given a list containing the paths to html files, add them to the epub object.
-        i.e. update the manifest file
+        '''Given a list containing the paths to html files, add them to the
+        epub object.  i.e. update the manifest file
         '''
         # parse and add the content of the  html files as etree objects
         for htmlfile in htmlfiles:
@@ -150,7 +151,7 @@ class Epub:
             content = etree.HTML(open(source_path, 'r').read())
 
             # Add Mathjax if the flag is set
-            if self.MathJax == True:
+            if self.MathJax:
                 content = self.add_mathjax_to_html(content)
 
             # add any extra css here.
@@ -186,7 +187,8 @@ class Epub:
         HTML = htmlfile.HTMLObject
         for img in HTML.findall('.//img'):
             src = os.path.normpath(
-                os.path.join(os.path.dirname(htmlfile.src), img.attrib.get('src')))
+                os.path.join(os.path.dirname(htmlfile.src),
+                             img.attrib.get('src')))
             if src is not None:
                 if r'http:' in src:
                     if self.verbose:
@@ -230,7 +232,7 @@ class Epub:
 <head>
     <meta charset="utf-8"></meta>
 </head>
-<body>        
+<body>
     <nav epub:type="toc" id="toc"></nav>
 </body>
 </html>''')
@@ -440,7 +442,7 @@ class Epub:
                 self.resources.add(this_resource)
 
                 # must copy to the current folder, if it does not exist
-                if use_local_mathjax == False:
+                if not use_local_mathjax:
                     #   copy mathjax to current folder.
                     local_dest = os.path.relpath(
                         src, os.path.join(mathjax_path, '..'))
@@ -471,8 +473,8 @@ class Epub:
         for li in element.findall('li'):
             a = li.find('a')
             labeltext.text = a.text
-            content.attrib['src'] = os.path.join(
-                'xhtml', self.epubname, a.attrib['href'])
+            content.attrib['src'] = os.path.join('xhtml', self.epubname,
+                                                 a.attrib['href'])
             # weird hack to stop elements from overwriting parent values. Not
             # sure why it works. O_o
             navPoint = copy.deepcopy(navPoint)
